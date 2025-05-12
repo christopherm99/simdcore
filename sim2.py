@@ -7,6 +7,10 @@ def apply_func(func, *args) -> bytearray: return from_np(func(*[as_np(arg, np.ha
 def extract_indices(arg1, arg2, arg3): return [(((arg1 << 16) | (arg2 << 8) | arg3) >> (21 - (i*3))) & 0x7 for i in range(8)]
 
 if __name__ == "__main__":
+  if len(sys.argv) != 2:
+    print("Usage: python sim2.py <input_file>")
+    sys.exit(1)
+
   with open(sys.argv[1], 'rb') as f: data = f.read()
   pc = 0
   memory = bytearray(2 ** 16)
