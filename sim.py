@@ -68,27 +68,27 @@ if __name__ == "__main__":
       case "00100", "000": # J (unconditional)
         pc = pack2(arg1, arg2)
         continue
-      case "00100", "001":
+      case "00100", "001": # JE
         if flags & ZF: 
           pc = pack2(arg1, arg2)
           continue
-      case "00100", "010":
+      case "00100", "010": # JNE
         if not (flags & ZF): 
           pc = pack2(arg1, arg2)
           continue
-      case "00100", "011":
+      case "00100", "011": # JGE
         if (flags & SF) == 0 or (flags & ZF): 
           pc = pack2(arg1, arg2)
           continue
-      case "00100", "100":
+      case "00100", "100": # JLE
         if (flags & SF) or (flags & ZF): 
           pc = pack2(arg1, arg2)
           continue
-      case "00100", "101":
+      case "00100", "101": # JGT
         if (flags & SF) == 0 and not (flags & ZF): 
           pc = pack2(arg1, arg2)
           continue
-      case "00100", "110":
+      case "00100", "110": # JLT
         if flags & SF: 
           pc = pack2(arg1, arg2)
           continue
@@ -96,7 +96,6 @@ if __name__ == "__main__":
       case "00101", "001": flags = get_flags(sregs[arg1] - pack2(arg2, arg3))
       case "00101", "010": flags = get_flags(pack2(arg1, arg2) - sregs[arg3])
       case "00101", "011": flags = arg1 & (SF | ZF)
-      
     pc += 1
 
   print("Sregs:")
