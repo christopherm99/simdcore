@@ -9,7 +9,11 @@ def pack2(arg1: int, arg2: int) -> int: return arg1 << 8 | arg2
 SF = 0b00000001
 ZF = 0b00000010
 
-def get_flags(val:int) -> int: return ((val == 0x00 & ZF) | (val & 0x8000 & SF))
+def get_flags(val: int) -> int:
+  val &= 0xFFFF
+  zf = ZF if val == 0 else 0
+  sf = SF if val & 0x8000 else 0
+  return zf | sf
 
 if __name__ == "__main__":
   if len(sys.argv) != 2:
@@ -24,7 +28,7 @@ if __name__ == "__main__":
   vregs = [bytearray(16) for _ in range(256)]
   flags = 0
 
-  for _ in range(256):
+  for _ in range(100):
   # for (opcode, arg1, arg2, arg3) in [struct.unpack("BBBB", b) for b in [data[i:i+4] for i in range(0, len(data), 4)]]:
   # PC * 4 : PC * 4 + 4
     opcode, arg1, arg2, arg3 = struct.unpack("BBBB", data[pc * 4:(pc * 4) + 4])
@@ -64,32 +68,39 @@ if __name__ == "__main__":
       case "00100", "000": # J (unconditional)
         pc = pack2(arg1, arg2)
         continue
-      case "00100", "001": # JE (ZF == 1)
-        if flags & ZF: pc = pack2(arg1, arg2)
-        continue
-      case "00100", "010": # JNE (ZF == 0)
-        if not (flags & ZF): pc = pack2(arg1, arg2)
-        continue
-      case "00100", "011": # JGE (SF == 0 | ZF == 1)
-        if (~(flags & SF)) | (flags & ZF): pc = pack2(arg1, arg2)
-        continue
-      case "00100", "100": # JLE (SF == 1 | ZF == 1)
-        if (flags & SF) | (flags & ZF): pc = pack2(arg1, arg2)
-        continue
-      case "00100", "101": # JGT (SF == 0 & ZF == 0)
-        if not (flags & SF) & (flags & ZF): pc = pack2(arg1, arg2)
-        continue
-      case "00100", "110": # JLT (SF == 1)
-        if flags & SF: pc = pack2(arg1, arg2)
-        continue
+      case "00100", "001":
+        if flags & ZF: 
+          pc = pack2(arg1, arg2)
+          continue
+      case "00100", "010":
+        if not (flags & ZF): 
+          pc = pack2(arg1, arg2)
+          continue
+      case "00100", "011":
+        if (flags & SF) == 0 or (flags & ZF): 
+          pc = pack2(arg1, arg2)
+          continue
+      case "00100", "100":
+        if (flags & SF) or (flags & ZF): 
+          pc = pack2(arg1, arg2)
+          continue
+      case "00100", "101":
+        if (flags & SF) == 0 and not (flags & ZF): 
+          pc = pack2(arg1, arg2)
+          continue
+      case "00100", "110":
+        if flags & SF: 
+          pc = pack2(arg1, arg2)
+          continue
       case "00101", "000": flags = get_flags(sregs[arg1] - sregs[arg2])
       case "00101", "001": flags = get_flags(sregs[arg1] - pack2(arg2, arg3))
       case "00101", "010": flags = get_flags(pack2(arg1, arg2) - sregs[arg3])
       case "00101", "011": flags = arg1 & (SF | ZF)
+      
     pc += 1
 
   print("Sregs:")
-  for i in range(5):
+  for i in range(6):
     print(f"s{i:2}: {sregs[i]:4}")
   print("Vregs:")
   for i in range(5):
