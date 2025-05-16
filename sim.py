@@ -1,10 +1,11 @@
-import struct, sys
+import argparse, struct, sys
 import numpy as np
 
 def as_np(arr: bytearray) -> np.ndarray: return np.frombuffer(arr, dtype=np.half)
 def from_np(arr: np.ndarray) -> bytearray: return arr.tobytes()
 def apply_func(func, *args) -> bytearray: return from_np(func(*[as_np(arg) for arg in args]))
 def pack2(arg1: int, arg2: int) -> int: return arg1 << 8 | arg2
+def extract_indices(arg1, arg2, arg3): return [(((arg1 << 16) | (arg2 << 8) | arg3) >> (21 - (i*3))) & 0x7 for i in range(8)]
 
 SF = 0b00000001
 ZF = 0b00000010
@@ -16,9 +17,14 @@ def get_flags(val: int) -> int:
   return zf | sf
 
 if __name__ == "__main__":
-  if len(sys.argv) != 2:
-    print("Usage: python sim2.py <input_file>")
+  if len(sys.argv) != 3:
+    print("Usage: python3 sim.py <input_file> <result_register>")
     sys.exit(1)
+
+  parser = argparse.ArgumentParser(description="SIMD Simulator")
+  parser.add_argument("input_file", help="Input binary file")
+  parser.add_argument("result_register", help="Register to print result (ex: v2 or s4)")
+  args = parser.parse_args()
 
   with open(sys.argv[1], 'rb') as f: data = f.read()
 
@@ -26,9 +32,11 @@ if __name__ == "__main__":
   memory = bytearray(2 ** 16)
   sregs = [0] * 256
   vregs = [bytearray(16) for _ in range(256)]
+  vperm = bytearray(16)
   flags = 0
 
-  for _ in range(100):
+  instr_count = len(data) // 4
+  while pc < instr_count:
   # for (opcode, arg1, arg2, arg3) in [struct.unpack("BBBB", b) for b in [data[i:i+4] for i in range(0, len(data), 4)]]:
   # PC * 4 : PC * 4 + 4
     opcode, arg1, arg2, arg3 = struct.unpack("BBBB", data[pc * 4:(pc * 4) + 4])
@@ -96,14 +104,34 @@ if __name__ == "__main__":
       case "00101", "001": flags = get_flags(sregs[arg1] - pack2(arg2, arg3))
       case "00101", "010": flags = get_flags(pack2(arg1, arg2) - sregs[arg3])
       case "00101", "011": flags = arg1 & (SF | ZF)
+      case "00011", "100": # load vperm
+        vperm[:] = vregs[arg1][:]
+        print(f"Loading v{arg1} to vperm: {as_np(vperm).tolist()}")
+      case "00011", "101":  # store vperm
+        vregs[arg1][:] = vperm[:]
+        print(f"Storing vperm to v{arg1}: {as_np(vregs[arg1]).tolist()}")
+      case "00011", "010": # scatter
+        indices = extract_indices(arg1, arg2, arg3)
+        src_values = as_np(vperm)
+        result = np.zeros(8, dtype=np.half)
+        for i in range(8): result[indices[i]] = src_values[i]
+        vperm[:] = from_np(result)
+      case "00011", "011": # gather
+        indices = extract_indices(arg1, arg2, arg3)
+        src_values = as_np(vperm)
+        result = np.zeros(8, dtype=np.half)
+        for i in range(8): result[i] = src_values[indices[i]]
+        vperm[:] = from_np(result)
     pc += 1
 
-  print("Sregs:")
-  for i in range(6):
-    print(f"s{i:2}: {sregs[i]:4}")
-  print("Vregs:")
-  for i in range(5):
-    print(f"v{i:2}: {as_np(vregs[i])}")
+result_reg = args.result_register.lower()
+if result_reg.startswith("v"):
+    reg_index = int(result_reg[1:])
+    reg_value = as_np(vregs[reg_index]).tolist()
+    print(f"Register v{reg_index} value: {reg_value}")
+elif result_reg.startswith("s"):
+    reg_index = int(result_reg[1:])
+    print(f"Register s{reg_index} value: {sregs[reg_index]} (0x{sregs[reg_index]:04x})")
 
 
 
