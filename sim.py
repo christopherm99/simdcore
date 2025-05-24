@@ -8,7 +8,10 @@ def pack2(arg1: int, arg2: int) -> int: return arg1 << 8 | arg2
 
 SF = 0b00000001
 ZF = 0b00000010
+base_addr = 0x00
+output_addr = 0x80
 
+    
 def get_flags(val: int) -> int:
   val &= 0xFFFF
   zf = ZF if val == 0 else 0
