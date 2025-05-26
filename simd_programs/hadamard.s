@@ -6,3 +6,4 @@ mul v2, v0, v1;
 
 mov s0, 0x80;
 mov [s0+0], v2;
+

@@ -27,7 +27,7 @@ for root, _, files in os.walk(simd_directory):
     if file.endswith('.s'):
       input_file = os.path.join(root, file)
       output_file = os.path.join(bin_directory, file.replace('.s', '.bin'))
-      print(f"Running: ./simd as {input_file} {output_file}")
+      #print(f"Running: ./simd as {input_file} {output_file}")
       subprocess.run(["./simd", "as", input_file, output_file])
 
 ### Test cases ###
@@ -57,7 +57,24 @@ def relu():
 def mse():
   x = testcases_config["mse"]["inputs"]["v0"]["data"]
   y = testcases_config["mse"]["inputs"]["v1"]["data"]
-  return np.mean(np.square(x - y), dtype=np.half)
+  mse = np.mean(np.square(x - y), dtype=np.half)
+  return np.full(8, mse, dtype=np.half)
+
+def sigmoid():
+  x = testcases_config["sigmoid"]["inputs"]["v0"]["data"]
+  return 1 / (1 + np.exp(-x))
+
+def inner_product():
+  x = testcases_config["inner_product"]["inputs"]["v0"]["data"]
+  y = testcases_config["inner_product"]["inputs"]["v1"]["data"]
+  inner_product = np.sum(np.multiply(x, y), dtype=np.half)
+  return np.full(8, inner_product, dtype=np.half)
+
+def matmul():
+	a = testcases_config["matmul"]["inputs"]["matrix_a"]["data"]
+	b = testcases_config["matmul"]["inputs"]["matrix_b"]["data"]
+	result = np.matmul(a, b).astype(np.half)
+	return result
 
 # make the name of the test case the same as the name of assembly program 
 testcase_mapping = {
@@ -66,35 +83,28 @@ testcase_mapping = {
   "reverse": np.array(reverse()),
   "transpose": np.array(transpose()),
   "relu": np.array(relu()),
-  "mse": np.array(mse())
+  "mse": np.array(mse()),
+  "sigmoid": np.array(sigmoid()),
+  "inner_product": np.array(inner_product()),
+#  "matmul": np.array(matmul())
 }
 
 for prog_name, config in testcases_config.items():
   for vec_name, vec_info in config["inputs"].items():
     input_file = os.path.join(input_directory, f"{prog_name}_{vec_name}_{vec_info['addr']:04x}_input.bin")
     write_float16_to_binary(vec_info["data"], input_file)
-    print(f"Input file created: {input_file}")
+    #print(f"Input file created: {input_file}")
 
   expected_output = testcase_mapping.get(prog_name)
   if expected_output is not None:
     expected_file = os.path.join(expected_directory, f"{prog_name}_expected.bin")
     write_float16_to_binary(expected_output, expected_file)
 
-print(f"Expected output for vector_add: {testcase_mapping['vector_add']}")
-print(f"Expected output for hadamard: {testcase_mapping['hadamard']}")
-print(f"Expected output for reverse: {testcase_mapping['reverse']}")
-print(f"Expected output for transpose: {testcase_mapping['transpose']}")
-print(f"Expected output for relu: {testcase_mapping['relu']}")
-print(f"Expected output for mse: {testcase_mapping['mse']}")
-
 bin_files = sorted([f for f in os.listdir(bin_directory) if f.endswith('.bin')])
 passed = 0
 for file in bin_files:
   prog_name = file.replace('.bin', '')
   test = testcase_mapping.get(prog_name)
-  
-  
-  print(f"Processing: {prog_name}")
   
   # Check if test exists
   test = testcase_mapping.get(prog_name)
