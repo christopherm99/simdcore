@@ -18,11 +18,9 @@ def vector_not(x): return np.bitwise_not(x.view(np.uint16)).view(np.half)
 def greater(x, y): return np.where(x > y, np.uint16(0xFFFF), np.uint16(0))
 #def less(x, y): return np.where(x < y, np.uint16(0xFFFF), np.uint16(0))
 
-
 SF = 0b00000001
 ZF = 0b00000010
 base_addr = 0x00
-output_addr = 0x80
     
 def get_flags(val: int) -> int:
   val &= 0xFFFF
@@ -37,7 +35,11 @@ if __name__ == "__main__":
   parser.add_argument("--output", help="Binary file to write output data")
   parser.add_argument("--input", action='append', help="Binary file containing input data")
   parser.add_argument("--addr", action='append', type=int, help="Memory address for input data")
+  parser.add_argument('--output-size', type=int, default=8, help='Number of elements to display from output address')
+  parser.add_argument('--output-addr', type=int, default=0x180, help='Memory address to read output from (default: 0x180)')
   args = parser.parse_args()
+
+  output_addr = args.output_addr
 
   with open(sys.argv[1], 'rb') as f: data = f.read()
 
@@ -69,10 +71,15 @@ if __name__ == "__main__":
     op = bin(opcode)[2:].zfill(8)
     match op[:5], op[5:]:
       case "00000", "000": sregs[arg1] = sregs[arg2]
-      case "00000", "001": sregs[arg1] = memory[sregs[arg2] + arg3] << 8 | memory[sregs[arg2] + arg3 + 1]
-      case "00000", "010":
-        memory[sregs[arg1] + arg2] = sregs[arg3] >> 8
-        memory[sregs[arg1] + arg2 + 1] = sregs[arg3] & 0xFF
+      case "00000", "001": 
+        raw_bytes = memory[sregs[arg2] + arg3:sregs[arg2] + arg3 + 2]
+        float_val = np.frombuffer(raw_bytes, dtype=np.half)[0] 
+        sregs[arg1] = int(float_val) if float_val == int(float_val) else int(float_val * 65536)
+      case "00000", "010": 
+        float_val = np.half(sregs[arg3])
+        float_bytes = float_val.tobytes()
+        memory[sregs[arg1] + arg2] = float_bytes[0]
+        memory[sregs[arg1] + arg2 + 1] = float_bytes[1]
       case "00000", "011": sregs[arg1] = arg2 << 8 | arg3
       case "00000", "100": vregs[arg1][:] = vregs[arg2]
       case "00000", "101":
@@ -176,9 +183,13 @@ if __name__ == "__main__":
         sys.stdout.flush()
     pc += 1
 
-  print("\nAfter Memory at 0x80:", as_np(memory[output_addr:output_addr+max_elements*2]).tolist())
+  print(f"\nAfter Memory at 0x{output_addr:03x}:")
+  output_size = args.output_size
+  memory_data = as_np(memory[output_addr:output_addr+output_size*2]).tolist()
+  print(memory_data)
+
   if args.output:
-    save_memory_to_binary(args.output, memory[output_addr:output_addr+max_elements*2])
+    save_memory_to_binary(args.output, memory[output_addr:output_addr+output_size*2], output_size)
 
 result_reg = args.result_register.lower()
 if result_reg.startswith("v"):

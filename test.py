@@ -74,7 +74,7 @@ def matmul():
 	a = testcases_config["matmul"]["inputs"]["matrix_a"]["data"]
 	b = testcases_config["matmul"]["inputs"]["matrix_b"]["data"]
 	result = np.matmul(a, b).astype(np.half)
-	return result
+	return np.array(result).flatten() 
 
 # make the name of the test case the same as the name of assembly program 
 testcase_mapping = {
@@ -86,7 +86,7 @@ testcase_mapping = {
   "mse": np.array(mse()),
   "sigmoid": np.array(sigmoid()),
   "inner_product": np.array(inner_product()),
-#  "matmul": np.array(matmul())
+  "matmul": np.array(matmul())
 }
 
 for prog_name, config in testcases_config.items():
@@ -123,6 +123,11 @@ for file in bin_files:
   cmd = ["python3", "sim.py", program_bin, result_reg, "--output", output_bin]
   
   config = testcases_config[prog_name]
+  output_size = config.get("output_size", 8) # default is 8 elements
+  output_addr = config.get("output_addr", 0x80)
+  print(f"Output size for {prog_name}: {output_size}")
+  cmd.extend(["--output-size", str(output_size)])
+  cmd.extend(["--output-addr", str(output_addr)])
   for vec_name, vec_info in config["inputs"].items():
     input_file = os.path.join(input_directory, f"{prog_name}_{vec_name}_{vec_info['addr']:04x}_input.bin")
     if os.path.exists(input_file):
@@ -136,7 +141,8 @@ for file in bin_files:
     continue
     
   if os.path.exists(output_bin):
-    actual_output = read_float16_from_binary(output_bin)
+    actual_output = read_float16_from_binary(output_bin, output_size)
+
     if np.array_equal(actual_output, test):
       print(f"Test PASSED for {file}")
       passed += 1

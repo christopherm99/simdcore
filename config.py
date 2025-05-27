@@ -14,7 +14,8 @@ testcases_config = {
 				"addr": 0x20
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
 	"hadamard": {
 		"inputs": {
@@ -27,7 +28,8 @@ testcases_config = {
 				"addr": 0x20
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
 	"transpose": {
 		"inputs": {
@@ -36,7 +38,8 @@ testcases_config = {
 				"addr": 0x00
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
 	"reverse": {
 		"inputs": {
@@ -45,7 +48,8 @@ testcases_config = {
 				"addr": 0x00
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
 	"relu": {
 		"inputs": {
@@ -54,7 +58,8 @@ testcases_config = {
 				"addr": 0x00
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
 	"mse": {
 		"inputs": {
@@ -67,7 +72,8 @@ testcases_config = {
 				"addr": 0x20
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
  "sigmoid": {
 		"inputs": {
@@ -76,7 +82,8 @@ testcases_config = {
 				"addr": 0x00
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
  "inner_product": {
 		"inputs": {
@@ -89,13 +96,14 @@ testcases_config = {
 				"addr": 0x20
 			}
 		},
-		"output_addr": 0x80
+		"output_addr": 0x80,
+		"output_size": 8
 	},
  	"matmul": {
 		"inputs": {
 			"matrix_a": {
 				"data": np.array([
-					[1, 0, 0, 0, 0, 0, 0, 0],  # row 0
+					[1, 2, 3, 4, 5, 6, 7, 8],  # row 0
 					[0, 1, 0, 0, 0, 0, 0, 0],  # row 1
 					[0, 0, 1, 0, 0, 0, 0, 0],  # row 2
 					[0, 0, 0, 1, 0, 0, 0, 0],  # row 3
@@ -117,9 +125,10 @@ testcases_config = {
 					[7, 8, 9, 10, 11, 12, 13, 14], # row 6
 					[8, 9, 10, 11, 12, 13, 14, 15] # row 7
 				], dtype=np.half),
-				"addr": 0x0080
+				"addr": 0x0100
 			}
 		},
-		"output_addr": 0x0100 
+		"output_addr": 0x0180,
+		"output_size": 64
 	}
 }
