@@ -2,10 +2,20 @@ import argparse, struct, sys
 import numpy as np
 from utils import load_memory_from_binary_at_address, save_memory_to_binary, hex_char_to_int, int_to_hex_char
 
-def as_np(arr: bytearray) -> np.ndarray: return np.frombuffer(arr, dtype=np.half)
+def as_np(arr: bytearray) -> np.ndarray: return np.frombuffer(arr, dtype=np.int16)
 def from_np(arr: np.ndarray) -> bytearray: return arr.tobytes()
-def apply_func(func, *args) -> bytearray: return from_np(func(*[as_np(arg) for arg in args]))
 def pack2(arg1: int, arg2: int) -> int: return arg1 << 8 | arg2
+def apply_func(func, *args) -> bytearray: return from_np(func(*[as_np(arg) for arg in args]))
+
+def vadd(a: np.ndarray, b: np.ndarray) -> np.ndarray: return (a + b).astype(np.int16)
+def vsub(a: np.ndarray, b: np.ndarray) -> np.ndarray: return (a - b).astype(np.int16)
+def vmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+  tmp = (a.astype(np.int16) * b.astype(np.int16)) >> FRAC_BITS
+  return np.clip(tmp, -32768, 32767).astype(np.int16)
+def vneg(a: np.ndarray) -> np.ndarray: return (-a).astype(np.int16)
+def vdiv(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+  tmp = (a.astype(np.int16) << FRAC_BITS) // b.astype(np.int16)
+  return np.clip(tmp, -32768, 32767).astype(np.int16)
 def pack3(arg1: int, arg2: int, arg3: int) -> int: return arg1 << 16 | arg2 << 8 | arg3
 def extract_indices(arg1, arg2, arg3): return [((pack3(arg1, arg2, arg3)) >> (21 - (i*3))) & 0x7 for i in range(8)]
 def initialize_memory(memory: bytearray, values) -> None: memory[base_addr:base_addr+len(values)*2] = from_np(np.array(values, dtype=np.half))
@@ -20,8 +30,7 @@ def greater(x, y): return np.where(x > y, np.uint16(0xFFFF), np.uint16(0))
 
 SF = 0b00000001
 ZF = 0b00000010
-base_addr = 0x00
-    
+
 def get_flags(val: int) -> int:
   val &= 0xFFFF
   zf = ZF if val == 0 else 0
@@ -86,8 +95,7 @@ if __name__ == "__main__":
         for i in range(16): vregs[arg1][i] = memory[sregs[arg2] + arg3 + i]
       case "00000", "110":
         for i in range(16): memory[sregs[arg1] + arg2 + i] = vregs[arg3][i]
-      case "00000", "111":
-        for i in range(16): vregs[arg1][(i*2):(i*2)+2] = from_np(np.half(sregs[arg2])) if (arg3 >> i) & 1 else vregs[arg1][(i*2):(i*2)+2]
+      case "00000", "111": as_np(vregs[arg1])[[(arg3 >> i) & 1 for i in range(8)]] = np.int16(sregs[arg2])
       case "00001", "000": sregs[arg1] = sregs[arg2] + sregs[arg3]
       case "00001", "001": sregs[arg1] = sregs[arg2] * sregs[arg3]
       case "00001", "010": sregs[arg1] = -sregs[arg2]
@@ -96,11 +104,11 @@ if __name__ == "__main__":
       case "00001", "101": sregs[arg1] = sregs[arg2] | sregs[arg3]
       case "00001", "110": sregs[arg1] = sregs[arg2] ^ sregs[arg3]
       case "00001", "111": sregs[arg1] = ~sregs[arg2]
-      case "00010", "000": vregs[arg1] = apply_func(np.add, vregs[arg2], vregs[arg3])
-      case "00010", "001": vregs[arg1] = apply_func(np.multiply, vregs[arg2], vregs[arg3])
-      case "00010", "010": vregs[arg1] = apply_func(np.negative, vregs[arg2])
-      case "00010", "011": vregs[arg1] = apply_func(np.divide, vregs[arg2], vregs[arg3]) # Need to set a flag for div by zero.
-      case "00010", "100": vregs[arg1] = apply_func(vector_and, vregs[arg2], vregs[arg3])
+      case "00010", "000": vregs[arg1] = apply_func(vadd, vregs[arg2], vregs[arg3])
+      case "00010", "001": vregs[arg1] = apply_func(vmul, vregs[arg2], vregs[arg3])
+      case "00010", "010": vregs[arg1] = apply_func(vneg, vregs[arg2])
+      case "00010", "011": vregs[arg1] = apply_func(vdiv, vregs[arg2], vregs[arg3]) # Need to set a flag for div by zero.
+      case "00010", "100": vregs[arg1] = apply_func(np.bitwise_and, vregs[arg2], vregs[arg3])
       case "00010", "101": vregs[arg1] = apply_func(np.bitwise_or, vregs[arg2], vregs[arg3])
       case "00010", "110": vregs[arg1] = apply_func(np.bitwise_xor, vregs[arg2], vregs[arg3])
       case "00010", "111": vregs[arg1] = apply_func(np.bitwise_not, vregs[arg2])
