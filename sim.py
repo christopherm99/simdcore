@@ -5,6 +5,9 @@ from utils import load_memory_from_binary_at_address, save_memory_to_binary, hex
 def as_np(arr: bytearray) -> np.ndarray: return np.frombuffer(arr, dtype=np.int16)
 def from_np(arr: np.ndarray) -> bytearray: return arr.tobytes()
 def pack2(arg1: int, arg2: int) -> int: return arg1 << 8 | arg2
+def pack3(arg1: int, arg2: int, arg3: int) -> int: return arg1 << 16 | arg2 << 8 | arg3
+def extract_indices(arg1, arg2, arg3): return [((pack3(arg1, arg2, arg3)) >> (21 - (i*3))) & 0x7 for i in range(8)]
+def initialize_memory(memory: bytearray, values) -> None: memory[base_addr:base_addr+len(values)*2] = from_np(np.array(values, dtype=np.int16))
 def apply_func(func, *args) -> bytearray: return from_np(func(*[as_np(arg) for arg in args]))
 
 def vadd(a: np.ndarray, b: np.ndarray) -> np.ndarray: return (a + b).astype(np.int16)
@@ -16,21 +19,21 @@ def vneg(a: np.ndarray) -> np.ndarray: return (-a).astype(np.int16)
 def vdiv(a: np.ndarray, b: np.ndarray) -> np.ndarray:
   tmp = (a.astype(np.int16) << FRAC_BITS) // b.astype(np.int16)
   return np.clip(tmp, -32768, 32767).astype(np.int16)
-def pack3(arg1: int, arg2: int, arg3: int) -> int: return arg1 << 16 | arg2 << 8 | arg3
-def extract_indices(arg1, arg2, arg3): return [((pack3(arg1, arg2, arg3)) >> (21 - (i*3))) & 0x7 for i in range(8)]
-def initialize_memory(memory: bytearray, values) -> None: memory[base_addr:base_addr+len(values)*2] = from_np(np.array(values, dtype=np.half))
 
 ### bitwise operations ###
-def vector_or(x, y): return np.bitwise_or(x.view(np.uint16), y.view(np.uint16)).view(np.half)
-def vector_xor(x, y): return np.bitwise_xor(x.view(np.uint16), y.view(np.uint16)).view(np.half)
-def vector_and(x, y): return np.bitwise_and(x.view(np.uint16), y.view(np.uint16)).view(np.half)
-def vector_not(x): return np.bitwise_not(x.view(np.uint16)).view(np.half)
+def vector_or(x, y): return np.bitwise_or(x.view(np.uint16), y.view(np.uint16)).view(np.uint16)
+def vector_xor(x, y): return np.bitwise_xor(x.view(np.uint16), y.view(np.uint16)).view(np.uint16)
+def vector_and(x, y): return np.bitwise_and(x.view(np.uint16), y.view(np.uint16)).view(np.uint16)
+def vector_not(x): return np.bitwise_not(x.view(np.uint16)).view(np.uint16)
 def greater(x, y): return np.where(x > y, np.uint16(0xFFFF), np.uint16(0))
 #def less(x, y): return np.where(x < y, np.uint16(0xFFFF), np.uint16(0))
 
 SF = 0b00000001
 ZF = 0b00000010
 
+FRAC_BITS = 15
+base_addr = 0x00
+    
 def get_flags(val: int) -> int:
   val &= 0xFFFF
   zf = ZF if val == 0 else 0
@@ -82,13 +85,13 @@ if __name__ == "__main__":
       case "00000", "000": sregs[arg1] = sregs[arg2]
       case "00000", "001": 
         raw_bytes = memory[sregs[arg2] + arg3:sregs[arg2] + arg3 + 2]
-        float_val = np.frombuffer(raw_bytes, dtype=np.half)[0] 
-        sregs[arg1] = int(float_val) if float_val == int(float_val) else int(float_val * 65536)
+        int_val = np.frombuffer(raw_bytes, dtype=np.int16)[0]  # Use int16, not half
+        sregs[arg1] = int(int_val)
       case "00000", "010": 
-        float_val = np.half(sregs[arg3])
-        float_bytes = float_val.tobytes()
-        memory[sregs[arg1] + arg2] = float_bytes[0]
-        memory[sregs[arg1] + arg2 + 1] = float_bytes[1]
+        int_val = np.int16(sregs[arg3])
+        int_bytes = int_val.tobytes()
+        memory[sregs[arg1] + arg2] = int_bytes[0]
+        memory[sregs[arg1] + arg2 + 1] = int_bytes[1]
       case "00000", "011": sregs[arg1] = arg2 << 8 | arg3
       case "00000", "100": vregs[arg1][:] = vregs[arg2]
       case "00000", "101":
@@ -108,7 +111,7 @@ if __name__ == "__main__":
       case "00010", "001": vregs[arg1] = apply_func(vmul, vregs[arg2], vregs[arg3])
       case "00010", "010": vregs[arg1] = apply_func(vneg, vregs[arg2])
       case "00010", "011": vregs[arg1] = apply_func(vdiv, vregs[arg2], vregs[arg3]) # Need to set a flag for div by zero.
-      case "00010", "100": vregs[arg1] = apply_func(np.bitwise_and, vregs[arg2], vregs[arg3])
+      case "00010", "100": vregs[arg1] = apply_func(vector_and, vregs[arg2], vregs[arg3])
       case "00010", "101": vregs[arg1] = apply_func(np.bitwise_or, vregs[arg2], vregs[arg3])
       case "00010", "110": vregs[arg1] = apply_func(np.bitwise_xor, vregs[arg2], vregs[arg3])
       case "00010", "111": vregs[arg1] = apply_func(np.bitwise_not, vregs[arg2])
@@ -157,13 +160,14 @@ if __name__ == "__main__":
       case "00011", "010": # scatter
         indices = extract_indices(arg1, arg2, arg3)
         src_values = as_np(vperm)
-        result = np.zeros(8, dtype=np.half)
-        for i in range(8): result[indices[i]] = src_values[i]
+        result = np.zeros(8, dtype=np.int16)
+        for i in range(8): 
+          result[indices[i]] = src_values[i]
         vperm[:] = from_np(result)
       case "00011", "011": # gather
         indices = extract_indices(arg1, arg2, arg3)
         src_values = as_np(vperm)
-        result = np.zeros(8, dtype=np.half)
+        result = np.zeros(8, dtype=np.int16)
         for i in range(8): result[i] = src_values[indices[i]]
         vperm[:] = from_np(result) 
       case "00110", "000": # inl

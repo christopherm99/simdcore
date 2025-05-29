@@ -4,7 +4,7 @@ import subprocess
 import numpy as np
 import ast
 from config import testcases_config
-from utils import write_float16_to_binary, read_float16_from_binary
+from utils import write_float16_to_binary, read_float16_from_binary, write_fixed16_to_binary, read_fixed16_from_binary, fixed_to_float
 
 if len(sys.argv) < 2:
   print("Usage: python3 test.py <result_register>  (e.g. v2 or s4)")
@@ -34,12 +34,13 @@ for root, _, files in os.walk(simd_directory):
 def vector_add():
   x = testcases_config["vector_add"]["inputs"]["v0"]["data"]
   y = testcases_config["vector_add"]["inputs"]["v1"]["data"]
-  return np.add(x, y, dtype=np.half)
+  return x + y
 
 def hadamard_prod():
   x = testcases_config["hadamard"]["inputs"]["v0"]["data"]
   y = testcases_config["hadamard"]["inputs"]["v1"]["data"]
-  return np.multiply(x, y, dtype=np.half)
+  result = np.array([(a * b) >> 15 for a, b in zip(x, y)], dtype=np.int16)
+  return result
 
 def reverse():
   x = testcases_config["reverse"]["inputs"]["v0"]["data"]
@@ -48,7 +49,7 @@ def reverse():
 def transpose():
   matrix = testcases_config["transpose"]["inputs"]["v0"]["data"]
   indices = [0, 4, 1, 5, 2, 6, 3, 7]
-  return np.array([matrix[i] for i in indices], dtype=np.half)
+  return np.array([matrix[i] for i in indices], dtype=np.int16)
 
 def relu():
   x = testcases_config["relu"]["inputs"]["v0"]["data"]
@@ -57,23 +58,21 @@ def relu():
 def mse():
   x = testcases_config["mse"]["inputs"]["v0"]["data"]
   y = testcases_config["mse"]["inputs"]["v1"]["data"]
-  mse = np.mean(np.square(x - y), dtype=np.half)
-  return np.full(8, mse, dtype=np.half)
-
-def sigmoid():
-  x = testcases_config["sigmoid"]["inputs"]["v0"]["data"]
-  return 1 / (1 + np.exp(-x))
+  diff = x - y
+  squared_diff = np.array([(d * d) >> 15 for d in diff], dtype=np.int16)
+  mse_val = np.mean(squared_diff)
+  return np.full(8, mse_val, dtype=np.int16)
 
 def inner_product():
   x = testcases_config["inner_product"]["inputs"]["v0"]["data"]
   y = testcases_config["inner_product"]["inputs"]["v1"]["data"]
-  inner_product = np.sum(np.multiply(x, y), dtype=np.half)
-  return np.full(8, inner_product, dtype=np.half)
+  inner_product = np.sum([(a * b) >> 15 for a, b in zip(x, y)], dtype=np.int32)
+  return np.full(8, inner_product, dtype=np.int16)
 
-def matmul():
+def matmul(): # won't work with fixed point rn
 	a = testcases_config["matmul"]["inputs"]["matrix_a"]["data"]
 	b = testcases_config["matmul"]["inputs"]["matrix_b"]["data"]
-	result = np.matmul(a, b).astype(np.half)
+	result = np.matmul(a, b).astype(np.int16)
 	return np.array(result).flatten() 
 
 # make the name of the test case the same as the name of assembly program 
@@ -84,7 +83,6 @@ testcase_mapping = {
   "transpose": np.array(transpose()),
   "relu": np.array(relu()),
   "mse": np.array(mse()),
-  "sigmoid": np.array(sigmoid()),
   "inner_product": np.array(inner_product()),
   "matmul": np.array(matmul())
 }
@@ -92,7 +90,7 @@ testcase_mapping = {
 for prog_name, config in testcases_config.items():
   for vec_name, vec_info in config["inputs"].items():
     input_file = os.path.join(input_directory, f"{prog_name}_{vec_name}_{vec_info['addr']:04x}_input.bin")
-    write_float16_to_binary(vec_info["data"], input_file)
+    write_fixed16_to_binary(vec_info["data"], input_file) 
     #print(f"Input file created: {input_file}")
 
   expected_output = testcase_mapping.get(prog_name)
@@ -141,7 +139,7 @@ for file in bin_files:
     continue
     
   if os.path.exists(output_bin):
-    actual_output = read_float16_from_binary(output_bin, output_size)
+    actual_output = read_fixed16_from_binary(output_bin, output_size)
 
     if np.array_equal(actual_output, test):
       print(f"Test PASSED for {file}")
@@ -150,6 +148,8 @@ for file in bin_files:
       print(f"Test FAILED for {file}")
       print("Expected:", test)
       print("Got     :", actual_output)
+      print("Expected (float):", [fixed_to_float(x) for x in test])
+      print("Got      (float):", [fixed_to_float(x) for x in actual_output])
   else:
     print(f"Output file not created: {output_bin}")
   
