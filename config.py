@@ -8,7 +8,6 @@ testcases_config = {
 	"vector_add": {
 		"inputs": {
 			"v0": {
-				# Scale values to [-1, 1) range
 				"data": np.array([
 					num_to_fixed(0.0), num_to_fixed(-0.1), num_to_fixed(0.2), num_to_fixed(-0.3), 
 					num_to_fixed(0.4), num_to_fixed(-0.5), num_to_fixed(0.6), num_to_fixed(-0.7)
