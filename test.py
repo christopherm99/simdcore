@@ -84,8 +84,7 @@ testcase_mapping = {
 }
 
 def create_memory_file(prog_name, config):
-  """Create a memory-mapped file with test data at the correct addresses"""
-  memory_size = 64 * 1024  # 64KB memory
+  memory_size = 64 * 1024 
   memory_file = os.path.join(memory_directory, f"{prog_name}_memory.bin")
   with open(memory_file, 'wb') as f:
     f.write(b'\x00' * memory_size)
@@ -106,11 +105,10 @@ def create_memory_file(prog_name, config):
   return memory_file
 
 def read_result_from_memory(memory_file, output_addr, output_size):
-  """Read test results directly from memory file"""
   with open(memory_file, 'rb') as f:
     with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
       start_addr = output_addr
-      end_addr = start_addr + (output_size * 2)  # 2 bytes per int16
+      end_addr = start_addr + (output_size * 2)
       result_bytes = mm[start_addr:end_addr]
       return np.frombuffer(result_bytes, dtype=np.int16)
 
