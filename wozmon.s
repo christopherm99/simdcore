@@ -1,5 +1,16 @@
 mov s5, 0x80; ;nop
 
+mov s15, 0xFF; // status
+
+INPUT_POLL:
+  test s15, 0x01    ; Check if input is ready
+  jeq INPUT_POLL    ; If not ready, keep polling
+  
+  ; Now read both bytes
+  inh s0            ; High byte
+  inl s0            ; Low byte
+  j LOOP;
+
 LOOP:
   ;mov s0, 0;
   inh s0;

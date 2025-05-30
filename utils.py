@@ -12,10 +12,8 @@ def load_memory_from_binary_at_address(filename, memory, address):
 	memory[address:address+len(memory_bytes)] = memory_bytes[:min(len(memory_bytes), len(memory) - address)]
 	return len(array)
 def write_fixed16_to_binary(array, filename):
-    """Write fixed-point int16 array to binary file"""
     array.astype(np.int16).tofile(filename)
 def read_fixed16_from_binary(filename, count=None):
-    """Read fixed-point int16 array from binary file"""
     data = np.fromfile(filename, dtype=np.int16)
     return data[:count] if count else data
 def float_to_fixed(val, frac_bits=15):
