@@ -27,6 +27,25 @@ uint8_t flags = 0;
 uint16_t pc = 0;
 uint16_t sregs[256] = {0};
 vreg_t vregs[256] = {0};
+vreg_t vperm = {0};
+
+uint16_t input_addr = 0x8000;
+uint16_t second_input_addr = 0x8020;
+uint16_t output_addr = 0x8040;
+
+// for local testing purposes
+void initialize_memory() {
+  uint16_t values[8] = {2, 4, 6, 8, 10, 12, 14, 16};
+  uint16_t second_values[8] = {0, 2, 4, 6, 8, 10, 12, 14};
+  
+  for (int i = 0; i < 8; i++) {
+    memory[input_addr + i * 2] = values[i] >> 8;       
+    memory[input_addr + i * 2 + 1] = values[i] & 0xFF; 
+    
+    memory[second_input_addr + i * 2] = second_values[i] >> 8;       
+    memory[second_input_addr + i * 2 + 1] = second_values[i] & 0xFF; 
+  }
+}
 
 uint8_t in() {
   uint8_t in;
@@ -49,16 +68,24 @@ void out(uint8_t out) {
   }
 }
 
+void extract_indices(uint8_t arg1, uint8_t arg2, uint8_t arg3, int indices[8]) {
+  uint32_t packed = (arg1 << 16) | (arg2 << 8) | arg3;
+  for (int i = 0; i < 8; i++) {
+    indices[i] = (packed >> (21 - (i * 3))) & 0x7;
+  }
+}
+
 void dump() {
   fprintf(stderr, "PC: %04x\n", pc);
   for (int i = 0; i < 16; i++) fprintf(stderr, "s%d: 0x%04x\n", i, sregs[i]);
   for (int i = 0; i < 4; i++)
     fprintf(stderr, "v%d: %04x %04x %04x %04x %04x %04x %04x %04x\n",
         i, vregs[i][0], vregs[i][1], vregs[i][2], vregs[i][3], vregs[i][4], vregs[i][5], vregs[i][6], vregs[i][7]);
-  for (int i = 0x1000; i < 0x1040; i += 0x10)
+  for (int i = output_addr; i < 0x8060; i += 0x10)
     fprintf(stderr, "%04x: %02x%02x %02x%02x %02x%02x %02x%02x\n",
         i, memory[i], memory[i + 1], memory[i + 2], memory[i + 3], memory[i + 4], memory[i + 5], memory[i + 6], memory[i + 7]);
-
+  fprintf(stderr, "vperm: %04x %04x %04x %04x %04x %04x %04x %04x\n",
+      vperm[0], vperm[1], vperm[2], vperm[3], vperm[4], vperm[5], vperm[6], vperm[7]);
   exit(0);
 }
 
@@ -131,15 +158,45 @@ void execute() {
             for (int i = 0; i < 8; i++) vregs[inst.A][i] = ~vregs[inst.B][i];
             break;
         } break;
-      case 0x03: // VECTOR COMPARE
+      case 0x03: // VECTOR COMPARE & PERM OPS
         switch (inst.aluctrl) {
           case 0:
-            for (int i = 0; i < 8; i++) vregs[inst.A][i] = (vregs[inst.B][i] == vregs[inst.C][i]) ? 0xFFFF : 0;
+            for (int i = 0; i < 8; i++) vregs[inst.A][i] = ((int16_t)vregs[inst.B][i] == (int16_t)vregs[inst.C][i]) ? 0xFFFF : 0;
             break;
           case 1:
-            for (int i = 0; i < 8; i++) vregs[inst.A][i] = (vregs[inst.B][i] > vregs[inst.C][i]) ? 0xFFFF : 0;
+            for (int i = 0; i < 8; i++) vregs[inst.A][i] = ((int16_t)vregs[inst.B][i] > (int16_t)vregs[inst.C][i]) ? 0xFFFF : 0;
             break;
-          default: fprintf(stderr, "unknown vector compare instruction\n"); dump();
+          case 2: { // SCATTER
+            int indices[8];
+            extract_indices(inst.A, inst.B, inst.C, indices);
+            uint16_t temp[8] = {0};
+            for (int i = 0; i < 8; i++) {
+              temp[indices[i]] = vperm[i];
+            }
+            for (int i = 0; i < 8; i++) {
+                vperm[i] = temp[i];
+            }
+            break;
+          }
+          case 3: { // GATHER
+            int indices[8];
+            extract_indices(inst.A, inst.B, inst.C, indices);
+            uint16_t temp[8];
+            for (int i = 0; i < 8; i++) {
+              temp[i] = vperm[indices[i]];
+            }
+            for (int i = 0; i < 8; i++) {
+                vperm[i] = temp[i];
+            }
+            break;
+          }
+          case 4: // LOAD
+            for (int i = 0; i < 8; i++) vperm[i] = vregs[inst.A][i];
+            break;
+          case 5: // STORE
+            for (int i = 0; i < 8; i++) vregs[inst.A][i] = vperm[i];
+            break;
+          default: fprintf(stderr, "unknown vector compare instruction\n"); exit(1);
         } break;
       case 0x04: // JUMP
         switch (inst.aluctrl) {
@@ -158,7 +215,7 @@ void execute() {
           case 1: flags = FLAG(sregs[inst.A] - (inst.B << 8 | inst.C)); break;
           case 2: flags = FLAG((inst.A << 8 | inst.B) - sregs[inst.C]); break;
           case 3: flags = inst.A & (ZF | SF); break;
-          default: fprintf(stderr, "unknown test instruction\n"); dump();
+          default: fprintf(stderr, "unknown test instruction\n"); exit(1);
         } break;
       case 0x06: // IO
         switch (inst.aluctrl) {
@@ -166,10 +223,10 @@ void execute() {
           case 1: sregs[inst.A] = (sregs[inst.A] & 0x00FF) | (in() << 8); break;
           case 2: out(sregs[inst.A] & 0xFF); break;
           case 3: out(sregs[inst.A] >> 8); break;
-          default: fprintf(stderr, "unknown IO instruction\n"); dump();
+          default: fprintf(stderr, "unknown IO instruction\n"); exit(1);
         } break;
       case 0x07: return;
-      default: fprintf(stderr, "unknown opcode 0x%02x\n", inst.opcode); dump();
+      default: fprintf(stderr, "unknown opcode 0x%02x\n", inst.opcode); exit(1);
     }
   }
 }
@@ -205,6 +262,9 @@ int main(int argc, char **argv) {
 
   close(fd);
 
+  // comment this out to use test.py instead
+  //initialize_memory();
+
   // add HLT (0x07) instruction at the end of the memory
   memcpy(&memory[sb.st_size], &(struct instruction){0, 0x07, 0, 0, 0}, sizeof(struct instruction));
 
@@ -212,10 +272,15 @@ int main(int argc, char **argv) {
 
   execute();
 
+  // write mem back to bin file
+  if ((fd = open(argv[1], O_WRONLY)) != -1) {
+      write(fd, memory, 65536);
+      close(fd);
+  }
+
   fprintf(stderr, "Execution finished.\n");
   dump();
 
+
   return 0;
 }
-
-
