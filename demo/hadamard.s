@@ -1,3 +1,4 @@
+.org 0x2000
 START:
   mov s30, 0x3e20 ;
   outh s30 ;

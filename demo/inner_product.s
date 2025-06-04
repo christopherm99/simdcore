@@ -1,3 +1,4 @@
+.org 0x3000
 START:
   ; First input
   mov s30, 0x3e20 ; "> "
