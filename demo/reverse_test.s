@@ -1,5 +1,5 @@
 ;; reverse.s - the reverseler
-.org 0x1000
+.org 0x7000
 START:
   mov s30, 0x3e20 ; "> "
   outh s30 ;

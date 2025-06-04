@@ -1,4 +1,5 @@
 ;; transpose.s - transpose flattened matrix
+.org 0x1500
 START:
   mov s30, 0x3e20 ; "> "
   outh s30 ;
