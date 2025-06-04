@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
   close(fd);
 
   // comment this out to use test.py instead
-  //initialize_memory();
+  initialize_memory();
 
   // add HLT (0x07) instruction at the end of the memory
   memcpy(&memory[sb.st_size], &(struct instruction){0, 0x07, 0, 0, 0}, sizeof(struct instruction));
