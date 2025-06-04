@@ -44,6 +44,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "read %zd bytes from file %s, expected 4\n", amt, argv[i + 1]);
         return 1;
       }
+      if (out != 0 && in != 0) fprintf(stderr, "warning: linking collsion detected\n");
       out |= in;
       all_eof = 0;
     }
